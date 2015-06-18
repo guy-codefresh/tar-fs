@@ -204,53 +204,56 @@ exports.extract = function(cwd, opts) {
     header = map(header) || header
     var name = path.join(cwd, path.join('/', header.name))
 
-    if (ignore(name)) {
-      stream.resume()
-      return next()
-    }
-
-    var stat = function(err) {
-      if (err) return next(err)
-      if (win32) return next()
-      utimes(name, header, function(err) {
-        if (err) return next(err)
-        chperm(name, header, next)
-      })
-    }
-
-    var onlink = function() {
-      if (win32) return next() // skip symlinks on win for now before it can be tested
-      xfs.unlink(name, function() {
-        xfs.symlink(header.linkname, name, stat)
-      })
-    }
-
-    var onfile = function() {
-      var ws = xfs.createWriteStream(name)
-
-      pump(mapStream(stream, header), ws, function(err) {
-        if (err) return next(err)
-        ws.on('close', stat)
-      })
-    }
-
-    if (header.type === 'directory') {
-      stack.push([name, header.mtime])
-      return mkdirp(name, {fs:xfs}, stat)
-    }
-
-    mkdirp(path.dirname(name), {fs:xfs}, function(err) {
-      if (err) return next(err)
-      if (header.type === 'symlink') return onlink()
-
-      if (header.type !== 'file') {
-        if (strict) return next(new Error('unsupported type for '+name+' ('+header.type+')'))
-        stream.resume()
-        return next()
+    ignore(name, function(needToIgnore) {
+      if (needToIgnore) {
+        stream.resume();
+        return next();
       }
 
-      onfile()
-    })
+      var stat = function(err) {
+        if (err) return next(err)
+        if (win32) return next()
+        utimes(name, header, function(err) {
+          if (err) return next(err)
+          chperm(name, header, next)
+        })
+      }
+
+      var onlink = function() {
+        if (win32) return next() // skip symlinks on win for now before it can be tested
+        xfs.unlink(name, function() {
+          xfs.symlink(header.linkname, name, stat)
+        })
+      }
+
+      var onfile = function() {
+        var ws = xfs.createWriteStream(name)
+
+        pump(mapStream(stream, header), ws, function(err) {
+          if (err) return next(err)
+          ws.on('close', stat)
+        })
+      }
+
+      if (header.type === 'directory') {
+        stack.push([name, header.mtime])
+        return mkdirp(name, {fs:xfs}, stat)
+      }
+
+      mkdirp(path.dirname(name), {fs:xfs}, function(err) {
+        if (err) return next(err)
+        if (header.type === 'symlink') return onlink()
+
+        if (header.type !== 'file') {
+          if (strict) return next(new Error('unsupported type for '+name+' ('+header.type+')'))
+          stream.resume()
+          return next()
+        }
+
+        onfile()
+      })
+
+    });
   })
 
   return extract
