@@ -144,7 +144,7 @@ exports.extract = function(cwd, opts) {
   if (!opts) opts = {}
 
   var xfs = opts.fs || fs
-  var ignore = opts.ignore || opts.filter || noop
+  var ignore = opts.ignore || opts.filter || function(name, cb) { cb(false); }
   var map = opts.map || noop
   var mapStream = opts.mapStream || echo
   var own = opts.chown !== false && !win32 && processGetuid() === 0
